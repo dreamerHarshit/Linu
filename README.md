@@ -1,267 +1,215 @@
 # Linux Server Configuration
+Taking a baseline Ubuntu Linux virtual machine that is hosted on Amazon EC2
+ and preparing it to host a web application.<br/>
+ Includes installing updates,
+ securing the server from a number of attack vectors, and installing/configuring web and database servers.
 
-Udacity Full Stack Nanodegree project 5
+## Server Information
+ - Public IP Address: 52.42.38.177
+ - SSH port: 2200
+ - URL of hosted web application: [http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com/](http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com/)
+ - SSH connection command: 
+ ```
+ ssh -i [key_file_path] grader@52.42.38.177 -p 2200
+ ```
+ <br/>where [key_file_path] is the path to the file containing the supplied private key of the grader user.
 
----------------------------------------
+## Configuration Steps
 
-## Objective
+### Create a new user named *grader* and grant the user sudo permissions
+ ```
+ # create linux user
+ sudo adduser grader
 
-Take a baseline installation of a Linux distribution on a virtual machine and prepare it to host a web applications, to include installing updates, securing it from a number of attack vectors and installing/configuring web and database servers.
-
-
-### Server Details
-
-Server IP address: 52.27.62.61
-
-SSH port: 2200
-
-Application URL: http://52.27.62.61
-
-
-### Software Installed
-
-* Apache2
-* PostgreSQL
-* bleach
-* flask-seasurf
-* git
-* github-flask
-* httplib2
-* libapache2-mod-wsgi
-* oauth2client
-* python-flask
-* python-pip
-* python-psycopg2
-* python-sqlalchemy
-* requests
-
-## Configuration
-
-#### Update all currently installed packages
-
-```sh
-sudo apt-get update
-sudo apt-get upgrade -y
+ # give user sudo permissions
+ # user will be asked for their password when using sudo
+ echo "grader ALL=(ALL) ALL" > /etc/sudoers.d/grader
 ```
 
-
-#### Configure [Automatic Security Updates][AutomaticSecurityUpdates]
-
-```sh
-sudo apt-get install unattended-upgrades
-sudo dpkg-reconfigure -plow unattended-upgrades
+### Enable key based login for the user *grader*
+On the local machine, use the command ssh-keygen to create public and private keys for the user *grader*.
 ```
-
-#### Create a new user named `grader`
-
-```sh
-adduser grader
+ssh-keygen -f ~/.ssh/grader
 ```
-
-#### Give the user `grader` permission to sudo
-
-```sh
-echo "grader ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/grader
+Put the public key in the *grader* user's .ssh folder on the server.
 ```
-
-#### Set up SSH Authentication
-
-Generate SSH key pairs, then copy the contents of the generated .pub file to the clipboard
-```sh
-# RUN ON LOCAL MACHINE
-ssh-keygen -t rsa -b 2048 -C "Just some comment"
-```
-
-Configure public key on server.
-   As the `grader` user paste `.pub` file contents in to `.ssh/authorized_key` file
-```sh
-# RUN ON SERVER
 su grader
-mkdir ~/.ssh
-vim ~/.ssh/authorized_keys
+mkdir /home/grader/.ssh
+nano /home/grader/.ssh/authorized_keys
+# copy public key from the local machine and paste into the authorized_keys file on the server, and save
 ```
 
-Set correct permissions
-```sh
-chmod 700 ~/.ssh
-chmod 644 ~/.ssh/authorized_keys
+### Disable remote login of the *root* user
 ```
+sudo nano /etc/ssh/sshd_config
+# set PermitRootLogin to no, and save the file
 
-#### Change the SSH port from 22 to 2200
-
-Open SSH config file
-```sh
-vim /etc/ssh/sshd_config
-```
-
-Change `Port 22` to `Port 2200`
-
-
-#### Remote login of the root user has been disabled
-
-Open SSH config file
-
-```sh
-vim /etc/ssh/sshd_config
-```
-
-Ensure `PermitRootLogin` has a value  no`
-
-
-#### Enforce SSH Authentication (i.e prevent password login)
-
-Open SSH config file
-```sh
-vim /etc/ssh/sshd_config
-```
-
-Ensure `PasswordAuthentication` has a value  no`
-
-
-#### Restart SSH service
-
-```sh
+# restart ssh service
 sudo service ssh restart
 ```
 
-#### Configure the Uncomplicated Firewall (UFW)
+### Update installed packages
+ ```
+sudo apt-get update
+sudo apt-get upgrade
+```
 
-Block all incoming requests
-```sh
+### Change SSH port from 22 To 2200
+ ```
+ sudo nano /etc/ssh/sshd_config
+ # change the line 'Port 22' to 'Port 2200', and save the file
+ ```
+
+### Configure Uncomplicated Firewall
+ ```
+# close all incoming ports
 sudo ufw default deny incoming
-```
-
-Allow all outgoing requests
-```sh
+# open all outgoing ports
 sudo ufw default allow outgoing
-```
-
-Allowing incoming connections for SSH (port 2200)
-```sh
+# open ssh port
 sudo ufw allow 2200/tcp
-```
-
-Allowing incoming connections for HTTP (port 80)
-```sh
-sudo ufw allow www
-```
-
-Allowing incoming connections for NTP (port 123)
-```sh
-sudo ufw allow ntp
-```
-
-Enable `ufw`
-```sh
+# open http port
+sudo ufw allow 80/tcp
+# open ntp port
+sudo ufw allow 123/udp
+# turn on firewall
 sudo ufw enable
 ```
 
-#### Configure the local timezone to UTC
+### Configure Local timezone to UTC
+The server was already set to UTC timezone, but the following command could be used.
+ ```
+ sudo dpkg-reconfigure tzdata
+ # choose 'None of the above' and then select 'UTC'
+ ```
 
-Reconfiguring the tzdata package
-```sh
-sudo dpkg-reconfigure tzdata
-# select `None of the above` then `UTC`
-```
+### Install the Apache web server and WSGI module
+ ```
+ sudo apt-get install apache2 libapache2-mod-wsgi
+ ```
 
-#### Install and configure Apache to serve a Python mod_wsgi application
+### Install and configure the PostgreSQL database system
+ ```
+ sudo apt-get install PostgreSQL
+ # check that remote connections are not allowed in PostgreSQL config file
+ sudo nano /etc/postgresql/9.3/main/pg_hba.config
+ ```
 
-Install required packages
-```sh
-sudo apt-get install apache2
-sudo apt-get install libapache2-mod-wsgi
-```
+### Create a user named catalog that has limited permissions to the catalog application database
+ 
+ ```
+# create a linux user named catalog
+sudo adduser catalog
 
-#### Install and configure PostgreSQL
-
-```sh
-sudo apt-get install postgresql
-```
-
-#### Create a new user named catalog that has limited permissions to your catalog application database
-
-Change to postgres user
-```sh
-sudo -i -u postgres
-```
-
-Create new dastbase user `catalog`
-```sh
-postgres@server:~$ createuser --interactive -P
-Enter name of role to add: catalog
-Enter password for new role:
-Enter it again:
-Shall the new role be a superuser? (y/n) n
-Shall the new role be allowed to create databases? (y/n) n
-Shall the new role be allowed to create more new roles? (y/n) n
-```
-
-Create `catalog` Database
-```sh
+# create a PostgreSQL role named catalog and a database named catalog
+sudo -u postgres -i
+postgres:~$ creatuser catalog
+postgres:~$ createdb catalog
 postgres:~$ psql
-CREATE DATABASE catalog;
-\q
+postgres=# ALTER DATABASE catalog OWNER TO catalog;
+postgres=# ALTER USER catalog WITH PASSWORD 'catalog'
+postgres=# \q
+postgres:~$ exit
 ```
 
-logout of postgres user
-```sh
-exit
-```
-
-#### Install git, clone and setup Catalog App project
-
-Install git
-```sh
+### Install git and clone the web application project
+Clone the web application to the web server's root folder, and ensure that the git
+folder is not accessible from the web server.
+ ```
 sudo apt-get install git
+cd /var/www
+git clone https://github.com/iainbx/item-catalog.git
+
+# ensure git folder is not accessible via web server
+echo "RedirectMatch 404 /\.git" > /var/www/.htaccess
+ ```
+
+### Install the Python libraries required by the web application
+ ```
+sudo apt-get install python-pip python-dev python-psycopg2
+sudo pip install -r /var/www/item-catalog/requirements.txt
 ```
+### Configure the web application to connect to the PostgreSQL database instead of a SQLite database
+ ```
+ sudo nano /var/www/item-catalog/config.py
+ # change the DATABASE_URI setting in the file from 'sqlite:///catalog.db' to 'postgresql://catalog:db_password@localhost/catalog', and save
+ ```
 
-clone repo
+### Create schema and populate the catalog database with sample data
+ ```
+ python /var/www/create_sample_data.py
+ ```
 
-Protect `.git` directory
-```sh
-sudo chmod 700 /var/www/catalog/catalog/.git
+### Configure Apache to serve the web application using WSGI
+Create the web application WSGI file.
+ ```
+sudo nano /var/www/item-catalog/app.wsgi
 ```
-
-Install application dependences
-```sh
-sudo apt-get -qqy install python-psycopg2
-sudo apt-get -qqy install python-flask
-sudo apt-get -qqy install python-sqlalchemy
-sudo apt-get -qqy install python-pip
-sudo pip install bleach
-sudo pip install flask-seasurf
-sudo pip install github-flask
-sudo pip install httplib2
-sudo pip install oauth2client
-sudo pip install requests
+Add the following lines to the file, and save the file.
 ```
-
-Create a wsgi file entry point to work with mod_wsgi
-```sh
 #!/usr/bin/python
 import sys
 import logging
 logging.basicConfig(stream=sys.stderr)
-sys.path.insert(0,"/var/www/catalog/catalog")
-
+sys.path.insert(0,"/var/www/item-catalog/")
 from catalog import app as application
+application.secret_key = 'asecretkey'
 ```
 
-Update last line of `/etc/apache2/sites-enabled/000-default.conf` to handle requests using the WSGI module, add the following line right before the closing </VirtualHost> line:
-```sh
-WSGIScriptAlias / /var/www/catalog/catalog/myapp.wsgi
+Update the Apache configuration file to serve the web application with WSGI.
+```
+sudo nano /etc/apache2/sites-enabled/000-default.conf
+```
+Add the following line inside the `<VirtualHost *:80>` element, and save the file.
+```
+WSGIScriptAlias / /var/www/item-catalog/app.wsgi
+```
+Restart Apache.
+```
+sudo apache2ctl restart
 ```
 
-Update Database connection string in `database_setup` to the following:
-```sh
-postgresql://catalog:password@localhost/catalog
+### Test the web application
+Browse to the public ip address of the server, [http://52.42.38.177](http://52.42.38.177), and 
+the web application should start up.
+If not, then the command ```sudo tail /var/log/apache2/error.log``` will be useful.
+
+### Update Google and Facebook authentication
+Update the *Authorized JavaScript Origins* and *Authorized redirect URIs*, in the Google developers console 
+for the web application, to include the web application URL http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com.
+Download new *google_client_secrets.json*  file with new origins and place in the web application's root folder.
+
+Update the *Valid OAuth redirect URIs*, in the Facebook developers console for the web application, to include
+ the web application URL http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com.
+
+
+### Allow Apache to write to the image upload folder
+Change the owner of the upload folder to the Apache user.
+ ```
+sudo chown www-data /var/www/item-catalog/catalog/static/uploads
+sudo chmod 744 /var/www/item-catalog/catalog/static/uploads
 ```
 
-Ensure oauth tokens are correct
+### Update Views.py with absolute paths to secrets json files
+The relative paths in Views.py, to open the json files containing the Google and Facebook OAuth settings,
+did not work with Apache. So I changed the relative paths to absolute paths.
 
-Restart Apache
-```sh
-sudo service apache2 restart
+### Fix sudo warning message
+The sudo command was displaying a warning message *unable to resolve host [ip-10-20-2-241]*.
+So I added the hostname to the loopback address in the /etc/hosts file, so that the line reads: 
+```127.0.0.1 localhost ip-10-20-2-241```
+
+### Fix apache2ctl warning message
+The apache2ctl command was displaying a warning message: 
+*Could not reliably determine the server's fully qualified domain name, using 127.0.0.1. Set the 'ServerName' directive globally to suppress this message*. 
+So I set the ServerName with the following command.
+```
+sudo echo -e "\nServerName localhost" >> /etc/apache2/apache2.conf
 ```
 
-[AutomaticSecurityUpdates]: https://help.ubuntu.com/community/AutomaticSecurityUpdates
+## References
+- [Ask Ubuntu](http://askubuntu.com/)
+- [PosgreSQL Docs](https://www.postgresql.org/docs/9.5/static/index.html)
+- [Apache Docs](https://httpd.apache.org/docs/2.4/)
+- [How To Install and Use PostgreSQL on Ubuntu 14.04](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-ubuntu-14-04)
+- Stackoverflow and the Readme's of other FSND students on Github were also useful, in times of need.
