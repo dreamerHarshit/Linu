@@ -5,12 +5,11 @@ Taking a baseline Ubuntu Linux virtual machine that is hosted on Amazon EC2
  securing the server from a number of attack vectors, and installing/configuring web and database servers.
 
 ## Server Information
- - Public IP Address: 52.42.38.177
+ - Public IP Address: 35.166.133.241 
  - SSH port: 2200
- - URL of hosted web application: [http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com/](http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com/)
  - SSH connection command: 
  ```
- ssh -i [key_file_path] grader@52.42.38.177 -p 2200
+ ssh -i ~/.ssh/udacity_key.rsa root@35.166.133.241 -p 2200
  ```
  <br/>where [key_file_path] is the path to the file containing the supplied private key of the grader user.
 
@@ -118,7 +117,7 @@ folder is not accessible from the web server.
  ```
 sudo apt-get install git
 cd /var/www
-git clone https://github.com/iainbx/item-catalog.git
+git clone https://github.com/dreamerHarshit/P3--Catalog-project.git
 
 # ensure git folder is not accessible via web server
 echo "RedirectMatch 404 /\.git" > /var/www/.htaccess
@@ -127,23 +126,23 @@ echo "RedirectMatch 404 /\.git" > /var/www/.htaccess
 ### Install the Python libraries required by the web application
  ```
 sudo apt-get install python-pip python-dev python-psycopg2
-sudo pip install -r /var/www/item-catalog/requirements.txt
+sudo pip install -r /var/www/P3--Catalog-project/requirements.txt
 ```
 ### Configure the web application to connect to the PostgreSQL database instead of a SQLite database
  ```
- sudo nano /var/www/item-catalog/config.py
+ sudo nano /var/www/P3--Catalog-project/config.py
  # change the DATABASE_URI setting in the file from 'sqlite:///catalog.db' to 'postgresql://catalog:db_password@localhost/catalog', and save
  ```
 
 ### Create schema and populate the catalog database with sample data
  ```
- python /var/www/create_sample_data.py
+ python /var/www/database_setup.py
  ```
 
 ### Configure Apache to serve the web application using WSGI
 Create the web application WSGI file.
  ```
-sudo nano /var/www/item-catalog/app.wsgi
+sudo nano /var/www/P3--Catalog-project/app.wsgi
 ```
 Add the following lines to the file, and save the file.
 ```
@@ -151,7 +150,7 @@ Add the following lines to the file, and save the file.
 import sys
 import logging
 logging.basicConfig(stream=sys.stderr)
-sys.path.insert(0,"/var/www/item-catalog/")
+sys.path.insert(0,"/var/www/P3--Catalog-project/")
 from catalog import app as application
 application.secret_key = 'asecretkey'
 ```
@@ -162,7 +161,7 @@ sudo nano /etc/apache2/sites-enabled/000-default.conf
 ```
 Add the following line inside the `<VirtualHost *:80>` element, and save the file.
 ```
-WSGIScriptAlias / /var/www/item-catalog/app.wsgi
+WSGIScriptAlias / /var/www/P3--Catalog-project/app.wsgi
 ```
 Restart Apache.
 ```
@@ -174,25 +173,6 @@ Browse to the public ip address of the server, [http://52.42.38.177](http://52.4
 the web application should start up.
 If not, then the command ```sudo tail /var/log/apache2/error.log``` will be useful.
 
-### Update Google and Facebook authentication
-Update the *Authorized JavaScript Origins* and *Authorized redirect URIs*, in the Google developers console 
-for the web application, to include the web application URL http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com.
-Download new *google_client_secrets.json*  file with new origins and place in the web application's root folder.
-
-Update the *Valid OAuth redirect URIs*, in the Facebook developers console for the web application, to include
- the web application URL http://ec2-52-42-38-177.us-west-2.compute.amazonaws.com.
-
-
-### Allow Apache to write to the image upload folder
-Change the owner of the upload folder to the Apache user.
- ```
-sudo chown www-data /var/www/item-catalog/catalog/static/uploads
-sudo chmod 744 /var/www/item-catalog/catalog/static/uploads
-```
-
-### Update Views.py with absolute paths to secrets json files
-The relative paths in Views.py, to open the json files containing the Google and Facebook OAuth settings,
-did not work with Apache. So I changed the relative paths to absolute paths.
 
 ### Fix sudo warning message
 The sudo command was displaying a warning message *unable to resolve host [ip-10-20-2-241]*.
@@ -206,10 +186,3 @@ So I set the ServerName with the following command.
 ```
 sudo echo -e "\nServerName localhost" >> /etc/apache2/apache2.conf
 ```
-
-## References
-- [Ask Ubuntu](http://askubuntu.com/)
-- [PosgreSQL Docs](https://www.postgresql.org/docs/9.5/static/index.html)
-- [Apache Docs](https://httpd.apache.org/docs/2.4/)
-- [How To Install and Use PostgreSQL on Ubuntu 14.04](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-ubuntu-14-04)
-- Stackoverflow and the Readme's of other FSND students on Github were also useful, in times of need.
